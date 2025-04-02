@@ -1,0 +1,35 @@
+{
+  "name": "ラズベリータイマー",
+  "short_name": "Timer",
+  "description": "Raspberry Pi Pico Wと連携するタイマーアプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "prefer_related_applications": false,
+  "permissions": ["storage"],
+  "protocol_handlers": [
+    {
+      "protocol": "web+timer",
+      "url": "/?timer=%s"
+    }
+  ],
+  "url_handlers": [
+    {
+      "origin": "https://raspberry-timer-app.vercel.app"
+    }
+  ],
+  "display_override": ["window-controls-overlay"]
+}

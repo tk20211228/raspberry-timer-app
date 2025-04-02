@@ -9,15 +9,40 @@ export default function TimerPage() {
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState("未接続");
   const [ipAddress, setIpAddress] = useState("192.168.10.105");
+  const [isPWA, setIsPWA] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // PWAチェック
+  useEffect(() => {
+    // PWAとして実行されているかチェック
+    const isInStandaloneMode = () =>
+      window.matchMedia("(display-mode: standalone)").matches ||
+      // 'any'型を使わない方法
+      ("standalone" in window.navigator &&
+        (window.navigator as Navigator & { standalone?: boolean })
+          .standalone) ||
+      document.referrer.includes("android-app://");
+
+    setIsPWA(isInStandaloneMode());
+
+    // PWAの場合、接続に関する警告を表示
+    if (isInStandaloneMode()) {
+      console.log("アプリはPWAモードで実行中です");
+    }
+  }, []);
 
   // WebSocket接続
   const connectWebSocket = () => {
     try {
       setStatus("接続中...");
-      const ws = new WebSocket(`ws://${ipAddress}:8080`);
+
+      // 接続先URLを構築
+      const wsUrl = `ws://${ipAddress}:8080`;
+      console.log(`接続先: ${wsUrl}`);
+
+      const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         setConnected(true);
@@ -137,6 +162,17 @@ export default function TimerPage() {
   return (
     <div className="container mx-auto p-4 max-w-md">
       <h1 className="text-2xl font-bold mb-4">タイマー</h1>
+
+      {isPWA ? (
+        <div className="mb-2 text-xs bg-yellow-100 p-2 rounded">
+          PWAモードで実行中です。接続問題が発生している場合は「chrome://flags」でInsecure
+          originsの設定を確認してください。
+        </div>
+      ) : (
+        <div className="mb-2 text-xs bg-blue-100 p-2 rounded">
+          インストール可能なアプリです。ブラウザのメニューから「ホーム画面に追加」を選択できます。
+        </div>
+      )}
 
       <div className="mb-4">
         <div className="flex items-center gap-2 mb-2">
