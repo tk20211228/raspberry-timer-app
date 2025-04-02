@@ -1,103 +1,252 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect, useRef } from "react";
+
+export default function TimerPage() {
+  const [time, setTime] = useState(60.0);
+  const [initialTime, setInitialTime] = useState(60.0); // 初期タイマー値の保持用
+  const [isRunning, setIsRunning] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [status, setStatus] = useState("未接続");
+  const [ipAddress, setIpAddress] = useState("192.168.10.105");
+
+  const socketRef = useRef<WebSocket | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // WebSocket接続
+  const connectWebSocket = () => {
+    try {
+      setStatus("接続中...");
+      const ws = new WebSocket(`ws://${ipAddress}:8080`);
+
+      ws.onopen = () => {
+        setConnected(true);
+        setStatus("接続成功");
+        socketRef.current = ws;
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          // サーバーからの状態更新があれば反映
+          if (data.running !== undefined && data.running !== isRunning) {
+            setIsRunning(data.running);
+          }
+        } catch (e) {
+          console.error("受信データの解析エラー:", e);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocketエラー:", error);
+        setStatus("接続エラー");
+        setConnected(false);
+      };
+
+      ws.onclose = () => {
+        setStatus("接続終了");
+        setConnected(false);
+        socketRef.current = null;
+      };
+
+      return ws;
+    } catch (error) {
+      console.error("接続エラー:", error);
+      setStatus("接続エラー");
+      return null;
+    }
+  };
+
+  // 切断
+  const disconnect = () => {
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+      setConnected(false);
+      setStatus("切断済み");
+    }
+  };
+
+  // トグルボタン
+  const toggleTimer = () => {
+    if (!connected) return;
+
+    if (isRunning) {
+      // 停止
+      stopTimer();
+      sendCommand("stop");
+    } else {
+      // 開始（設定された時間からリスタート）
+      setTime(initialTime);
+      startTimer();
+      sendCommand("start");
+    }
+  };
+
+  // コマンド送信
+  const sendCommand = (command: string) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(command);
+    }
+  };
+
+  // タイマー開始
+  const startTimer = () => {
+    setIsRunning(true);
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+
+    timerRef.current = setInterval(() => {
+      setTime((prevTime) => {
+        const newTime = Math.max(0, prevTime - 0.1);
+        // タイマーが0になったら停止
+        if (newTime === 0) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+          }
+          setIsRunning(false);
+          sendCommand("timeout");
+        }
+        return parseFloat(newTime.toFixed(1));
+      });
+    }, 100);
+  };
+
+  // タイマー停止
+  const stopTimer = () => {
+    setIsRunning(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+  };
+
+  // コンポーネントがアンマウントされたらタイマーとWebSocketをクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+    };
+  }, []);
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="container mx-auto p-4 max-w-md">
+      <h1 className="text-2xl font-bold mb-4">タイマー</h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <input
+            type="text"
+            value={ipAddress}
+            onChange={(e) => setIpAddress(e.target.value)}
+            className="border p-2 flex-1"
+            placeholder="Pico W IPアドレス"
+            disabled={connected}
+          />
+          {!connected ? (
+            <button
+              onClick={connectWebSocket}
+              className="bg-blue-500 text-white p-2 rounded"
+            >
+              接続
+            </button>
+          ) : (
+            <button
+              onClick={disconnect}
+              className="bg-red-500 text-white p-2 rounded"
+            >
+              切断
+            </button>
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+        <div
+          className={`p-2 rounded text-center ${
+            connected
+              ? "bg-green-100 text-green-800"
+              : "bg-red-100 text-red-800"
+          }`}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+          {status}
+        </div>
+      </div>
+
+      <div className="text-center">
+        {!isRunning && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-1">
+              タイマー時間（秒）
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="3600"
+              step="0.1"
+              value={initialTime}
+              onChange={(e) =>
+                setInitialTime(parseFloat(e.target.value) || 60.0)
+              }
+              className="border p-2 text-center w-full mb-2 text-xl"
+              disabled={isRunning}
+            />
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setInitialTime(30.0)}
+                className="bg-gray-200 px-2 py-1 rounded text-sm"
+                disabled={isRunning}
+              >
+                30秒
+              </button>
+              <button
+                onClick={() => setInitialTime(60.0)}
+                className="bg-gray-200 px-2 py-1 rounded text-sm"
+                disabled={isRunning}
+              >
+                60秒
+              </button>
+              <button
+                onClick={() => setInitialTime(90.0)}
+                className="bg-gray-200 px-2 py-1 rounded text-sm"
+                disabled={isRunning}
+              >
+                90秒
+              </button>
+              <button
+                onClick={() => setInitialTime(120.0)}
+                className="bg-gray-200 px-2 py-1 rounded text-sm"
+                disabled={isRunning}
+              >
+                2分
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div
+          className="text-6xl font-bold my-8"
+          style={{
+            color: isRunning ? "#3b82f6" : time > 0 ? "#000" : "#dc2626",
+          }}
         >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+          {time.toFixed(1)}
+        </div>
+
+        <button
+          onClick={toggleTimer}
+          disabled={!connected}
+          className={`px-6 py-3 rounded text-white font-bold w-full ${
+            isRunning
+              ? "bg-red-500 hover:bg-red-600"
+              : "bg-blue-500 hover:bg-blue-600"
+          } ${!connected ? "opacity-50 cursor-not-allowed" : ""}`}
         >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          {isRunning ? "停止" : "開始"}
+        </button>
+      </div>
     </div>
   );
 }
